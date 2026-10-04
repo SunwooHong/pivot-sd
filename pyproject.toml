@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pivot-sd"
+version = "0.1.0"
+description = "Offline pivot self-distillation for masked diffusion language models"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "torch",
+  "transformers",
+  "accelerate",
+  "peft",
+  "numpy",
+  "tqdm",
+  "datasets",
+  "regex",
+  "human-eval",
+]
+
+[tool.setuptools.packages.find]
+include = ["pivot_sd*"]

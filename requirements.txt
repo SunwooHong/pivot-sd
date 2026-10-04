@@ -1,0 +1,11 @@
+# pip install -r requirements.txt
+# The versions below are the ones used for the reported runs.
+torch==2.10.0
+transformers==4.46.2
+accelerate==1.12.0
+peft==0.18.1
+numpy==2.4.1
+tqdm==4.67.1
+datasets==2.19.1
+regex==2026.1.15
+human-eval
