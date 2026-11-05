@@ -1,4 +1,4 @@
-"""Shared LoRA / TrainingArguments knobs for SFT IG train scripts."""
+"""LoRA settings for training and evaluation."""
 from __future__ import annotations
 
 import argparse
@@ -69,14 +69,11 @@ def add_lora_training_args(parser: argparse.ArgumentParser) -> None:
         nargs="+",
         default=None,
         metavar="NAME",
-        help=(
-            "LoRA target module names (default: q_proj k_proj v_proj). "
-            "GSM8K full_lora: q_proj k_proj v_proj o_proj up_proj down_proj gate_proj."
-        ),
+        help="LoRA target module names. The reported runs use q_proj k_proj v_proj o_proj up_proj down_proj gate_proj.",
     )
     parser.add_argument(
         "--weight-decay",
         type=float,
         default=0.01,
-        help="TrainingArguments weight_decay (GSM8K full_lora uses 0.1).",
+        help="AdamW weight decay. The reported runs use 0.1.",
     )

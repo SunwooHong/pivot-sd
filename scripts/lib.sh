@@ -12,6 +12,25 @@ export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:T
 
 DATASET="${DATASET:-math}"
 METHOD="${METHOD:-pivot_sd}"
+BACKBONE="${BACKBONE:-llada}"
+case "${BACKBONE}" in
+  llada|LLaDA)
+    BACKBONE=llada
+    FAMILY=LLaDA
+    ALG="${ALG:-default}"
+    PIVOT_BLOCK_SIZE="${PIVOT_BLOCK_SIZE:-64}"
+    ;;
+  dream|Dream)
+    BACKBONE=dream
+    FAMILY=Dream
+    ALG="${ALG:-maskgit_plus}"
+    PIVOT_BLOCK_SIZE="${PIVOT_BLOCK_SIZE:-0}"
+    ;;
+  *)
+    echo "BACKBONE must be llada or dream, got ${BACKBONE}." >&2
+    exit 1
+    ;;
+esac
 GEN_LENGTH="${GEN_LENGTH:-256}"
 BLOCK_LENGTH="${BLOCK_LENGTH:-64}"
 STEPS="${STEPS:-${GEN_LENGTH}}"
@@ -128,8 +147,9 @@ trace_run_dir() {
   if [ "${DATASET}" = "acecode" ]; then
     dataset_save="acecode/with_tests"
   fi
-  printf '%s/LLaDA/%s/default/all/len_%s_block_%s/steps_%s/s%s\n' \
-    "${SAVE_DIR}" "${dataset_save}" "${GEN_LENGTH}" "${BLOCK_LENGTH}" "${STEPS}" "${NUM_SAMPLES}"
+  printf '%s/%s/%s/%s/all/len_%s_block_%s/steps_%s/s%s\n' \
+    "${SAVE_DIR}" "${FAMILY}" "${dataset_save}" "${ALG}" \
+    "${GEN_LENGTH}" "${BLOCK_LENGTH}" "${STEPS}" "${NUM_SAMPLES}"
 }
 
 pivot_jsonl_for_method() {

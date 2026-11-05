@@ -168,16 +168,18 @@ def rows_for_trajectory(
     sample_seed: int,
     gen_length: int,
     random_seed: int,
+    block_size: int = 64,
 ) -> List[dict]:
     if selector == "entropy":
         chosen = topk_by_token_entropy(steps, k=top_k, exclude_token_ids=exclude_ids)
         mag_key = "token_entropy"
     else:
-        inject_info_gain_density(steps, 64)
+        inject_info_gain_density(steps, block_size)
         step_pick = "random" if selector == "random_step" else "top"
         seed = random_step_seed(path, orig_idx, sample_seed, random_seed) if step_pick == "random" else 0
         chosen = extract_step_pivots(
             steps,
+            block_size=block_size,
             keep_top_k=top_k,
             exclude_token_ids=exclude_ids,
             step_pick=step_pick,
@@ -226,6 +228,7 @@ def build(
     p_high: float = 99.0,
     random_seed: int = 42,
     gen_length: int = 256,
+    block_size: int = 64,
 ) -> Dict[str, Any]:
     from transformers import AutoTokenizer
 
@@ -283,6 +286,7 @@ def build(
                 sample_seed=sample_seed,
                 gen_length=gen_length,
                 random_seed=random_seed,
+                block_size=block_size,
             )
         )
     if not raw_rows:
@@ -328,6 +332,7 @@ def main() -> None:
     p.add_argument("--p-high", type=float, default=99.0)
     p.add_argument("--random-seed", type=int, default=42, help="Base seed for --selector random_step")
     p.add_argument("--gen-length", type=int, default=256)
+    p.add_argument("--block-size", type=int, default=64, help="0 disables the block-boundary filter (Dream)")
     args = p.parse_args()
     build(
         stepwise_dir=args.stepwise_dir,
@@ -343,6 +348,7 @@ def main() -> None:
         p_high=args.p_high,
         random_seed=args.random_seed,
         gen_length=args.gen_length,
+        block_size=args.block_size,
     )
 
 

@@ -23,8 +23,11 @@ def main() -> None:
     p.add_argument("--data-path", default=None, help="Test JSON/JSONL for math or gsm8k")
     p.add_argument("--block-length", type=int, default=64)
     p.add_argument("--steps", type=int, default=None, help="Defaults to --gen-length")
+    p.add_argument("--backbone", default="llada", choices=("llada", "dream"))
+    p.add_argument("--alg", default=None)
     args, unknown = p.parse_known_args()
     steps = args.gen_length if args.steps is None else args.steps
+    alg = args.alg or ("maskgit_plus" if args.backbone == "dream" else "default")
 
     if args.dataset in ("math", "gsm8k"):
         forwarded = [
@@ -34,7 +37,8 @@ def main() -> None:
             "--gen_length", str(args.gen_length),
             "--block_length", str(args.block_length),
             "--steps", str(steps),
-            "--alg", "default",
+            "--alg", alg,
+            "--backbone", args.backbone,
             "--temperature", "0",
         ]
         if args.data_path:
@@ -53,7 +57,8 @@ def main() -> None:
         "--gen_length", str(args.gen_length),
         "--block_length", str(args.block_length),
         "--steps", str(steps),
-        "--alg", "default",
+        "--alg", alg,
+        "--backbone", args.backbone,
         "--code_prompt_style", "kodcode_v3",
     ]
     forwarded.extend(unknown)

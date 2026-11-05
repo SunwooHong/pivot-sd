@@ -14,7 +14,7 @@ from accelerate.utils import gather_object
 from human_eval.data import write_jsonl
 from human_eval.evaluation import evaluate_functional_correctness
 
-from pivot_sd.decode import stable_confident_decode
+from pivot_sd.decode import decode_response, run_dir
 from pivot_sd.parsers import Parser, test_solution
 
 KODCODE_SYSTEM_PROMPT_V2 = (
@@ -46,10 +46,10 @@ def kodcode_v3_messages(prompt_body: str, tests=None) -> list:
     ]
 
 
-def _run_dir(save_dir: str, benchmark: str, alg: str, gen_length: int, block_length: int, steps: int, num_samples: int) -> str:
-    return (
-        f"{save_dir}/LLaDA/{benchmark}/kodcode_v3/{alg}/all/"
-        f"len_{gen_length}_block_{block_length}/steps_{steps}/s{num_samples}"
+def _run_dir(save_dir: str, benchmark: str, alg: str, gen_length: int, block_length: int, steps: int, num_samples: int, backbone: str = "llada") -> str:
+    family = "Dream" if backbone == "dream" else "LLaDA"
+    return run_dir(
+        save_dir, family, f"{benchmark}/kodcode_v3", alg, gen_length, block_length, steps, num_samples
     )
 
 
@@ -131,8 +131,9 @@ def test_humaneval_plus(
     test_size=None, random_sampling=False,
     num_samples=1,
     save_steps=False,
+    backbone="llada",
 ):
-    save_dir = _run_dir(save_dir, "humanevalplus", alg, gen_length, block_length, steps, num_samples)
+    save_dir = _run_dir(save_dir, "humanevalplus", alg, gen_length, block_length, steps, num_samples, backbone)
     os.makedirs(save_dir, exist_ok=True)
     step_save_dir = None
     if save_steps:
@@ -161,11 +162,11 @@ def test_humaneval_plus(
             task_samples = []
             task_steps = []
             for sample_idx in range(num_samples):
-                x_output, used_steps = stable_confident_decode(
+                x_output, used_steps = decode_response(
                     model, tokenizer, input_ids_original, gen_length, steps, block_length,
-                    temperature=temperature, mask_id=126336,
+                    temperature=temperature,
                     step_save_dir=step_save_dir, example_idx=f"q{i}_s{sample_idx}",
-                    alg=alg,
+                    alg=alg, backbone=backbone,
                 )
                 task_steps.append(used_steps)
                 decoded_text = tokenizer.batch_decode(
@@ -236,8 +237,9 @@ def test_mbppplus(
     test_size=None, random_sampling=False,
     num_samples=1,
     save_steps=False,
+    backbone="llada",
 ):
-    save_dir = _run_dir(save_dir, "mbppplus", alg, gen_length, block_length, steps, num_samples)
+    save_dir = _run_dir(save_dir, "mbppplus", alg, gen_length, block_length, steps, num_samples, backbone)
     os.makedirs(save_dir, exist_ok=True)
     step_save_dir = None
     if save_steps:
@@ -268,11 +270,11 @@ def test_mbppplus(
             task_steps = []
             task_passed = False
             for sample_idx in range(num_samples):
-                x_output, used_steps = stable_confident_decode(
+                x_output, used_steps = decode_response(
                     model, tokenizer, input_ids_original, gen_length, steps, block_length,
-                    temperature=temperature, mask_id=126336,
+                    temperature=temperature,
                     step_save_dir=step_save_dir, example_idx=f"q{idx}_s{sample_idx}",
-                    alg=alg,
+                    alg=alg, backbone=backbone,
                 )
                 decoded_text = tokenizer.batch_decode(
                     x_output[:, input_ids_original.shape[1]:], skip_special_tokens=True
@@ -339,7 +341,8 @@ def main():
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--test_size", type=int, default=None)
     parser.add_argument("--random_sampling", action="store_true")
-    parser.add_argument("--alg", type=str, default="default", choices=["default", "random", "topk_margin", "entropy"])
+    parser.add_argument("--alg", type=str, default="default", choices=["default", "random", "topk_margin", "entropy", "maskgit_plus"])
+    parser.add_argument("--backbone", type=str, default="llada", choices=["llada", "dream"])
     parser.add_argument("--num_samples", type=int, default=1)
     parser.add_argument("--save_steps", action="store_true")
     parser.add_argument("--humaneval_k", type=str, default="1")
@@ -366,6 +369,7 @@ def main():
         random_sampling=args.random_sampling,
         num_samples=args.num_samples,
         save_steps=args.save_steps,
+        backbone=args.backbone,
     )
     if args.dataset == "humanevalplus":
         test_humaneval_plus(

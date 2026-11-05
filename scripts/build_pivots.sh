@@ -52,6 +52,7 @@ for selector in ${SELECTORS}; do
     --p-high "${P_HIGH}"
     --random-seed "${SEED}"
     --gen-length "${GEN_LENGTH}"
+    --block-size "${PIVOT_BLOCK_SIZE}"
     --qid-offset "${QID_OFFSET:-0}"
   )
   if [ -f "${ALL_RESULTS}" ]; then

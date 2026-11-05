@@ -1,19 +1,4 @@
-"""
-Train with ``IGPivotTrainer`` from ``sft_trainer_ig_rank.py`` (explicit positive/negative scopes,
-optional rank loss on positives, optional legacy ``--loss-mode`` mapping).
-
-Example:
-  uv run python sft_train_ig_rank.py --model-name .../LLaDA-8B-Instruct \\
-    --pivot-jsonl ./data/llada/math_ig_density/all/pivots_filtered.jsonl \\
-    --train-json ./data/math_train_s2000.jsonl \\
-    --output-dir ./scratch_out --job-name ig_rank_uniform_rank \\
-    --positive-mask-loss uniform --negative-mask-loss pivot_only \\
-    --no-advantage-in-loss --use-pivot-rank-loss
-
-Resume LoRA training from a Trainer checkpoint (same ``--output-dir`` / ``--job-name`` as the run that produced it):
-  ... --output-dir ./scratch_out --job-name ig_rank_uniform_rank \\
-    --resume-from-checkpoint ./scratch_out/ig_rank_uniform_rank/checkpoint-6000
-"""
+"""LoRA training entry point used by ``python -m pivot_sd.train``."""
 from __future__ import annotations
 
 import argparse
@@ -33,13 +18,7 @@ from pivot_sd.save_utils import apply_save_at_steps
 
 
 def _patch_torch_load_for_trainer_resume() -> Callable[[], None]:
-    """
-    PyTorch 2.6+ defaults torch.load(..., weights_only=True). HuggingFace Trainer resumes
-    RNG/optimizer pickles that include numpy types → UnpicklingError unless weights_only=False.
-
-    Patches torch.load only for the duration of trainer.train(resume_from_checkpoint=...).
-    Caller must invoke the returned no-arg function in a finally block to restore torch.load.
-    """
+    """Allow Trainer to resume optimizer state on PyTorch 2.6+ (weights_only=True rejects numpy)."""
     orig = torch.load
 
     def _wrapped(*args, **kwargs):
@@ -79,9 +58,9 @@ def parse_args():
     p.add_argument("--num-epochs", type=int, default=1)
     p.add_argument("--learning-rate", type=float, default=1e-5)
     p.add_argument("--grad-accum-steps", type=int, default=4)
-    p.add_argument("--output-dir", type=str, default="./sft_ig_rank")
-    p.add_argument("--job-name", type=str, default="ig_rank")
-    p.add_argument("--mask-id", type=int, default=126336)
+    p.add_argument("--output-dir", type=str, default="./runs")
+    p.add_argument("--job-name", type=str, default="pivot_sd")
+    p.add_argument("--mask-id", type=int, default=-1, help="Default: tokenizer.mask_token_id")
     p.add_argument("--debugging", action="store_true")
     p.add_argument("--debug-max-steps", type=int, default=3)
     p.add_argument("--seed", type=int, default=42)
@@ -196,6 +175,7 @@ def load_model_and_tokenizer(args):
     )
     model = get_peft_model(model, lora_config)
     model = model.to(torch.bfloat16)
+    model.config.use_cache = False
     return tokenizer, model
 
 
@@ -214,6 +194,10 @@ def main() -> None:
             )
     init_seed(args.seed, cudnn_deterministic=not args.no_cudnn_deterministic)
     tokenizer, model = load_model_and_tokenizer(args)
+    if args.mask_id < 0:
+        if tokenizer.mask_token_id is None:
+            raise SystemExit("Tokenizer has no mask_token_id. Pass --mask-id.")
+        args.mask_id = int(tokenizer.mask_token_id)
 
     positive_advantage_only = args.negative_weight_multiplier == 0 and not args.keep_negative_advantage_rows
     init_cache = (args.pivot_dataset_cache or os.environ.get("PIVOT_DATASET_CACHE") or "").strip() or None

@@ -34,7 +34,8 @@ eval_one() {
       --dataset "${eval_dataset}"
       --gen-length "${GEN_LENGTH}"
       --block-length "${BLOCK_LENGTH}"
-      --steps "${STEPS}"
+      --steps "${STEPS}" \
+      --backbone "${BACKBONE}"
     )
     if [ "${eval_dataset}" = "math" ] || [ "${eval_dataset}" = "gsm8k" ]; then
       require TEST_DATA

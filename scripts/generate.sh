@@ -24,7 +24,8 @@ launch python -m pivot_sd.generate \
   --steps "${STEPS}" \
   --temperature "${TEMPERATURE}" \
   --num-samples "${NUM_SAMPLES}" \
-  --alg default \
+  --alg "${ALG}" \
+  --backbone "${BACKBONE}" \
   "$@"
 
 echo "stepwise: $(trace_run_dir)/stepwise"

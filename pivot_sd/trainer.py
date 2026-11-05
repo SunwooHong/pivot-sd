@@ -1021,8 +1021,17 @@ class IGPivotTrainer(Trainer):
         clean_input_ids = inputs.pop("clean_input_ids")
         prompt_lengths = inputs.pop("prompt_lengths")
 
+        attn = inputs["attention_mask"]
+        dream = getattr(getattr(model, "config", None), "model_type", None) == "dream"
+        if dream:
+            valid = attn[:, None, None, :].to(dtype=torch.float32)
+            inputs["attention_mask"] = (1.0 - valid) * torch.finfo(torch.float32).min
         outputs = model(**inputs)
         logits = outputs.logits
+        if dream:
+            from pivot_sd.dream_decode import align_dream_logits
+
+            logits = align_dream_logits(logits)
         log_probs = F.log_softmax(logits.float(), dim=-1)
         b = torch.arange(logits.size(0), device=logits.device)
 
@@ -1037,7 +1046,7 @@ class IGPivotTrainer(Trainer):
             logits.size(0), -1
         )
         valid_supervision = (pos_idx >= pl.unsqueeze(1)) & (pos_idx < excl.unsqueeze(1))
-        attn = inputs["attention_mask"].bool()
+        attn = attn.bool()
         masked = (inputs["input_ids"] == self.mask_id) & attn & valid_supervision
 
         if _uses_block_random_pivot(self.positive_mask_loss, self.negative_mask_loss):

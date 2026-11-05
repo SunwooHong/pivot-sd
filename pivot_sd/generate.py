@@ -24,7 +24,8 @@ def main() -> None:
     p.add_argument("--steps", type=int, default=256)
     p.add_argument("--temperature", type=float, default=0.9)
     p.add_argument("--num-samples", type=int, default=4)
-    p.add_argument("--alg", default="default", choices=("default", "random", "topk_margin", "entropy"))
+    p.add_argument("--alg", default="default", choices=("default", "random", "topk_margin", "entropy", "maskgit_plus"))
+    p.add_argument("--backbone", default="llada", choices=("llada", "dream"))
     p.add_argument("--slice-start", type=int, default=None)
     p.add_argument("--slice-end", type=int, default=None)
     p.add_argument("--save-steps", action="store_true", default=True)
@@ -42,6 +43,7 @@ def main() -> None:
         "--temperature", str(args.temperature),
         "--num_samples", str(args.num_samples),
         "--alg", args.alg,
+        "--backbone", args.backbone,
     ]
     if args.slice_start is not None:
         forwarded.extend(["--slice_start", str(args.slice_start)])

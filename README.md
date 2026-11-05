@@ -2,7 +2,7 @@
 
 **Pivot-SD** is offline self-distillation for masked diffusion language models. A frozen **LLaDA-8B-Instruct** model samples a denoising trajectory. Each committed step is scored by how much it reduces the predictive entropy of the masks that remain in the active block. The top 10 steps are kept as pivots. Correct trajectories supply a cross-entropy target at the pivot token. Incorrect trajectories supply an unlikelihood target at that same token.
 
-This repository reproduces the sample-200 training and evaluation pipeline on LLaDA-8B-Instruct, including the ablations below. Benchmarks are **MATH**, **GSM8K**, **HumanEval+**, and **MBPP+**. AceCode is the training set for the code benchmarks.
+This repository reproduces that pipeline on LLaDA-8B-Instruct, the same recipe on Dream-v0-Instruct-7B, and the budget-matched diffu-GRPO and wd1++ baselines. Benchmarks are **MATH**, **GSM8K**, **HumanEval+**, and **MBPP+**. AceCode is the training set for the code benchmarks.
 
 ## Installation
 
@@ -18,7 +18,9 @@ pip install -e .
 
 `regex` parses MATH answers. `human-eval` scores HumanEval+. HumanEval+ and MBPP+ problems are downloaded with `datasets` from `evalplus/humanevalplus` and `evalplus/mbppplus`. The `evalplus` package is not imported.
 
-The model is [LLaDA-8B-Instruct](https://huggingface.co/GSAI-ML/LLaDA-8B-Instruct). Pass a local directory or that Hugging Face id as `MODEL_PATH`.
+The main model is [LLaDA-8B-Instruct](https://huggingface.co/GSAI-ML/LLaDA-8B-Instruct). Dream runs use [Dream-v0-Instruct-7B](https://huggingface.co/Dream-org/Dream-v0-Instruct-7B). Pass a local directory or the Hugging Face id as `MODEL_PATH`.
+
+RL baselines use a second environment. See [RL baselines](#rl-baselines).
 
 ## Data
 
@@ -136,7 +138,7 @@ AceCode trains one model and evaluates HumanEval+ and MBPP+. A checkpoint direct
 
 `random_token` reads `pivots_ig.jsonl`. The random index is chosen when the loss is computed, inside the same generation block of 64 tokens. `random_step` reads `pivots_random.jsonl`. `entropy_pivot` reads `pivots_entropy.jsonl`. The others read `pivots_ig.jsonl`.
 
-Rows marked in the paper as three-run averages (`entropy_pivot`, `posneg_all`, `random_step`, `random_token`, `pivot_sd`) use the sample-200 g0 set plus two matched seeds.
+Rows marked in the paper as three-run averages (`entropy_pivot`, `posneg_all`, `random_step`, `random_token`, `pivot_sd`) resample the 200 training questions, the trajectories, and the training seed.
 
 ## Configuration
 
@@ -160,14 +162,73 @@ Environment variables read by `scripts/lib.sh`:
 | `SEED` | `42` | Train seed and random-step base seed |
 | `NUM_GPUS` | `1` | `accelerate launch --num_processes` |
 | `GPU_ID` | — | Sets `CUDA_VISIBLE_DEVICES` |
+| `BACKBONE` | `llada` | `llada` or `dream` |
 
 Generation confidence (`--alg`) is `default`, `random`, `topk_margin`, or `entropy`. The reported trajectories use `default`: the confidence of the sampled token, then top-k unmasking inside the active block. `topk_margin` is top-1 probability minus top-2. `entropy` uses negative entropy as a confidence score. The entropy-pivot ablation does not use that sampler. It ranks tokens that were already committed, by the entropy stored in the stepwise log.
+
+## Dream
+
+`BACKBONE=dream` runs the same pipeline on Dream-v0-Instruct-7B. Sampling is Dream's maskgit schedule (`alg=maskgit_plus`): several tokens can be written on one step, and the logits are shifted by one position before the loss, which is how Dream aligns a token with the position it fills. Information gain is the average entropy drop over the masks that are still open. There is no 64-token block, so the block-boundary filter is off. Training still keeps the top 10 steps and uses the same unlikelihood weights.
+
+```bash
+BACKBONE=dream \
+MODEL_PATH=Dream-org/Dream-v0-Instruct-7B \
+DATA_PATH=/path/to/math_200.jsonl \
+TEST_DATA=/path/to/math_test.json \
+DATASET=math METHOD=pivot_sd \
+bash scripts/run.sh
+```
+
+Generation temperature is 0.9. Evaluation is greedy. On the 256-token setting the Dream runs in the paper are:
+
+| Method | MATH | GSM8K | HumanEval+ | MBPP+ |
+|---|---:|---:|---:|---:|
+| Dream-v0-Instruct-7B | 37.97 | 79.55 | 54.27 | 60.58 |
+| SFT-GT | 35.40 | 61.49 | 54.27 | 59.26 |
+| SFT-SD | 40.80 | 70.74 | 48.78 | 61.38 |
+| Pivot-SD | 42.20 | 81.88 | 58.54 | 61.64 |
+
+## RL baselines
+
+diffu-GRPO and wd1++ are the online baselines in the main table. Both train from LLaDA-8B-Instruct with LoRA `r=128`, `alpha=64`, learning rate `3e-6`, 4 completions per prompt, block 64, 256 diffusion steps, and 1000 optimizer steps on the same 200-prompt file. wd1++ is `trainer_type=wll_d1_neg`. diffu-GRPO is `trainer_type=d1`. Prompts longer than 512 tokens are dropped. AceCode puts the first three test cases in the prompt.
+
+Install this stack in its own environment. It pins a different `transformers` and a specific `trl` commit, and it needs DeepSpeed (ZeRO-2) and flash-attn. If flash-attn is not available, set `attn_implementation: sdpa` in the yaml under `baselines/wd1/`.
+
+```bash
+conda create -n pivot-sd-rl python=3.10
+conda activate pivot-sd-rl
+pip install -r baselines/requirements.txt
+```
+
+```bash
+METHOD=wd1pp DATASET=math \
+MODEL_PATH=GSAI-ML/LLaDA-8B-Instruct \
+DATA_PATH=/path/to/math_200.jsonl \
+GPU_ID=0,1 NUM_GPUS=2 \
+bash baselines/run_rl.sh
+```
+
+`METHOD=diffu_grpo` runs the other baseline. `DATASET` is `math`, `gsm8k`, or `acecode`. The 5,000-step rows use a 2,000-prompt file and `MAX_STEPS=5000`.
+
+Checkpoints are LoRA adapters. Score one with the Pivot-SD eval entry point:
+
+```bash
+python -m pivot_sd.evaluate \
+  --model-path runs/math/rl/wd1pp/checkpoint-1000 \
+  --save-dir runs/math/eval/wd1pp/math/checkpoint-1000 \
+  --dataset math \
+  --data-path /path/to/math_test.json
+```
+
+Reported wall-clock on two L40s, 1,000 steps: diffu-GRPO 5.4 h, wd1++ 3.6 h, Pivot-SD 2.8 h including the one-time trajectory sample.
 
 ## Layout
 
 | Path | Role |
 |---|---|
 | `pivot_sd/decode.py` | LLaDA block decoder and stepwise entropy logs |
+| `pivot_sd/dream_decode.py` | Dream maskgit sampler and the logit shift used in training |
+| `baselines/` | diffu-GRPO and wd1++ |
 | `pivot_sd/scoring.py` | `info_gain_density` and top-10 selection |
 | `pivot_sd/build_pivots.py` | Stepwise JSON to pivot JSONL |
 | `pivot_sd/methods.py` | The seven training recipes |
@@ -177,6 +238,17 @@ Generation confidence (`--alg`) is `default`, `random`, `topk_margin`, or `entro
 | `pivot_sd/evaluate.py` | Greedy evaluation CLI |
 | `scripts/` | Generate, build, train, evaluate |
 
+## Citation
+
+```bibtex
+@article{kim2026pivotsd,
+  title={Pivot-SD: Efficient Self-Distillation for Masked Diffusion Language Models},
+  author={Kim, Seo Hyun and Hong, Sunwoo and Choi, Younwoo and Chao, Chen-Hao and Yun, Se-Young and Krishnan, Rahul G.},
+  journal={arXiv preprint arXiv:2610.03665},
+  year={2026}
+}
+```
+
 ## Acknowledgements
 
-This codebase builds on [LLaDA](https://github.com/ML-GSAI/LLaDA) and scores HumanEval+ with [HumanEval](https://github.com/openai/human-eval). HumanEval+ and MBPP+ problems come from the EvalPlus Hugging Face datasets.
+This codebase builds on [LLaDA](https://github.com/ML-GSAI/LLaDA), [Dream](https://github.com/DreamLM/Dream), [d1](https://github.com/dllm-reasoning/d1), and [wd1](https://github.com/xiaohangt/wd1). HumanEval+ is scored with [HumanEval](https://github.com/openai/human-eval). HumanEval+ and MBPP+ problems come from the EvalPlus Hugging Face datasets.

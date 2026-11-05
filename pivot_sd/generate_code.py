@@ -10,7 +10,7 @@ from accelerate import Accelerator
 from accelerate.utils import gather_object
 
 from pivot_sd.answers import evaluate_task, process_file
-from pivot_sd.decode import stable_confident_decode
+from pivot_sd.decode import decode_response, run_dir
 
 KODCODE_SYSTEM_PROMPT_V2 = (
     "You are an expert Python programmer. You must write complete, valid Python code "
@@ -82,10 +82,11 @@ def test_dataset(
     resume=False,
     code_eval_timeout=3.0,
     data_path=None,
+    backbone="llada",
 ):
-    save_dir = (
-        f"{save_dir}/LLaDA/acecode/with_tests/{alg}/all/"
-        f"len_{gen_length}_block_{block_length}/steps_{steps}/s{num_samples}"
+    family = "Dream" if backbone == "dream" else "LLaDA"
+    save_dir = run_dir(
+        save_dir, family, "acecode/with_tests", alg, gen_length, block_length, steps, num_samples
     )
     os.makedirs(save_dir, exist_ok=True)
     step_save_dir = None
@@ -135,11 +136,11 @@ def test_dataset(
                     generated_text, used_steps = _load_stepwise_sample(step_save_dir, i, sample_idx)
                     resumed_samples += 1
                 else:
-                    x_output, used_steps = stable_confident_decode(
+                    x_output, used_steps = decode_response(
                         model, tokenizer, input_ids_original, gen_length, steps, block_length,
-                        temperature=temperature, mask_id=126336,
+                        temperature=temperature,
                         step_save_dir=step_save_dir, example_idx=f"q{i}_s{sample_idx}",
-                        alg=alg,
+                        alg=alg, backbone=backbone,
                     )
                     generated_text = tokenizer.batch_decode(
                         x_output[:, input_ids_original.shape[1]:], skip_special_tokens=True
@@ -219,7 +220,8 @@ def main():
     parser.add_argument("--test_size", type=int, default=None)
     parser.add_argument("--slice_start", type=int, default=None)
     parser.add_argument("--slice_end", type=int, default=None)
-    parser.add_argument("--alg", type=str, default="default", choices=["default", "random", "topk_margin", "entropy"])
+    parser.add_argument("--alg", type=str, default="default", choices=["default", "random", "topk_margin", "entropy", "maskgit_plus"])
+    parser.add_argument("--backbone", type=str, default="llada", choices=["llada", "dream"])
     parser.add_argument("--num_samples", type=int, default=1)
     parser.add_argument("--save_steps", action="store_true")
     parser.add_argument("--resume", action="store_true")
@@ -254,6 +256,7 @@ def main():
         resume=args.resume,
         code_eval_timeout=args.code_eval_timeout,
         data_path=args.data_path,
+        backbone=args.backbone,
     )
 
 

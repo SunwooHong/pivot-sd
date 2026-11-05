@@ -180,3 +180,29 @@ def stable_confident_decode(
             json.dump(all_step_outputs, f, indent=2)
 
     return x, used_steps
+
+
+def decode_response(
+    model, tokenizer, input_ids_original, gen_length, steps, block_length,
+    temperature=0.0, step_save_dir=None, example_idx=0, alg="default", backbone="llada",
+):
+    if backbone == "dream":
+        from pivot_sd.dream_decode import dream_maskgit_decode
+
+        return dream_maskgit_decode(
+            model, tokenizer, input_ids_original, gen_length, steps,
+            temperature=temperature, mask_id=getattr(tokenizer, "mask_token_id", None),
+            step_save_dir=step_save_dir, example_idx=example_idx,
+        )
+    return stable_confident_decode(
+        model, tokenizer, input_ids_original, gen_length, steps, block_length,
+        temperature=temperature, mask_id=126336,
+        step_save_dir=step_save_dir, example_idx=example_idx, alg=alg,
+    )
+
+
+def run_dir(save_dir, family, middle, alg, gen_length, block_length, steps, num_samples):
+    return (
+        f"{save_dir}/{family}/{middle}/{alg}/all/"
+        f"len_{gen_length}_block_{block_length}/steps_{steps}/s{num_samples}"
+    )

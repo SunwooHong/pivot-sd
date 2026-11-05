@@ -15,7 +15,7 @@ from pivot_sd.answers import (  # noqa: F401
     parse_ground_truth_answer,
     process_file,
 )
-from pivot_sd.decode import stable_confident_decode
+from pivot_sd.decode import decode_response, run_dir
 
 
 def test_dataset(
@@ -28,10 +28,11 @@ def test_dataset(
     num_samples=1,
     save_steps=False,
     data_path=None,
+    backbone="llada",
 ):
-    save_dir = (
-        f"{save_dir}/LLaDA/{dataset}/{alg}/all/"
-        f"len_{gen_length}_block_{block_length}/steps_{steps}/s{num_samples}"
+    family = "Dream" if backbone == "dream" else "LLaDA"
+    save_dir = run_dir(
+        save_dir, family, dataset, alg, gen_length, block_length, steps, num_samples
     )
     
     # All ranks need output dirs: non-main processes write stepwise JSON during decode.
@@ -83,11 +84,11 @@ def test_dataset(
             input_ids_original = torch.tensor(tokenizer(prompt_text)['input_ids']).to(accelerator.device).unsqueeze(0)
             
             for sample_idx in range(num_samples):
-                x_output, used_steps = stable_confident_decode(
+                x_output, used_steps = decode_response(
                     model, tokenizer, input_ids_original, gen_length, steps, block_length,
-                    temperature=temperature, mask_id=126336,
+                    temperature=temperature,
                     step_save_dir=step_save_dir, example_idx=f"q{i}_s{sample_idx}",
-                    alg=alg,
+                    alg=alg, backbone=backbone,
                 )
 
                 generated_text = tokenizer.batch_decode(x_output[:, input_ids_original.shape[1]:], skip_special_tokens=True)[0]
@@ -175,7 +176,8 @@ def main():
     parser.add_argument('--test_size', type=int, default=None, help='Size of the test set')
     parser.add_argument('--slice_start', type=int, default=None, help='Start index for dataset slice (inclusive)')
     parser.add_argument('--slice_end', type=int, default=None, help='End index for dataset slice (exclusive)')
-    parser.add_argument('--alg', type=str, default='default', choices=['default', 'random', 'topk_margin', 'entropy'], help='Confidence score used to choose the committed token')
+    parser.add_argument('--alg', type=str, default='default', choices=['default', 'random', 'topk_margin', 'entropy', 'maskgit_plus'])
+    parser.add_argument('--backbone', type=str, default='llada', choices=['llada', 'dream'])
     parser.add_argument('--num_samples', type=int, default=1, help='Number of samples to generate per question/task')
     parser.add_argument('--save_steps', action='store_true', help='Save the results of each step')
     parser.add_argument('--data_path', type=str, default=None, help='JSONL of prompts')
@@ -207,6 +209,7 @@ def main():
             num_samples=args.num_samples,
             save_steps=args.save_steps,
             data_path=args.data_path,
+            backbone=args.backbone,
         )
 
 if __name__ == '__main__':
