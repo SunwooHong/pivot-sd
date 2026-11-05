@@ -1,8 +1,61 @@
-# Pivot-SD
+<div align="center">
+
+# Pivot-SD: Efficient Self-Distillation for Masked Diffusion Language Models
+
+### 🎤 EMNLP 2026 Main Conference · **Oral Presentation**
+
+**Seo Hyun Kim**<sup>1,2,\*</sup> · **Sunwoo Hong**<sup>1,2,\*</sup> · Younwoo Choi<sup>2</sup> · Chen-Hao Chao<sup>2</sup> · Se-Young Yun<sup>1,†</sup> · Rahul G. Krishnan<sup>2,†</sup>
+
+<sup>1</sup>KAIST AI &nbsp;&nbsp; <sup>2</sup>University of Toronto & Vector Institute
+<br><sub>\*Equal contribution &nbsp; †Corresponding authors</sub>
+
+<br>
+
+[![Project Page](https://img.shields.io/badge/Project-Page-f2b01e?style=for-the-badge&logo=googlechrome&logoColor=white)](https://sunwoohong.github.io/pivot-sd/)
+[![Paper](https://img.shields.io/badge/Paper-ACL_Anthology-c8323c?style=for-the-badge&logo=readthedocs&logoColor=white)](https://aclanthology.org/2026.emnlp-main.2146/)
+[![arXiv](https://img.shields.io/badge/arXiv-2610.03665-b31b1b?style=for-the-badge&logo=arxiv&logoColor=white)](https://arxiv.org/abs/2610.03665)
+[![EMNLP 2026 Oral](https://img.shields.io/badge/EMNLP_2026-Oral-3a2a92?style=for-the-badge)](https://aclanthology.org/2026.emnlp-main.2146/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-0e8a6a?style=for-the-badge)](LICENSE)
+
+</div>
+
+---
+
+## 📣 News
+
+- **[Oct 2026]** 🎉 Pivot-SD was presented as an **Oral** at **EMNLP 2026** in Budapest.
+- **[Nov 2026]** Code released, including the Dream-7B recipe and the budget-matched RL baselines.
+
+## 💡 TL;DR
+
+> **Training a diffusion LM doesn't need every token, just the few pivots that shape the rest of the generation.**
+
+Pivot-SD puts a loss on only **10 tokens per response (<4%)** and, with just **200 questions × 4 rollouts**, outperforms full-sequence SFT and budget-matched diffusion RL on LLaDA-8B-Instruct across math and code, in **2.8 hours** on two GPUs.
+
+<p align="center">
+  <img src="assets/method.png" width="85%" alt="Pivot-SD update: in a successful trajectory the pivot is reinforced with cross-entropy from its pre-commit state; in a failed trajectory it is suppressed with unlikelihood.">
+</p>
 
 **Pivot-SD** is offline self-distillation for masked diffusion language models. A frozen **LLaDA-8B-Instruct** model samples a denoising trajectory. Each committed step is scored by how much it reduces the predictive entropy of the masks that remain in the active block. The top 10 steps are kept as pivots. Correct trajectories supply a cross-entropy target at the pivot token. Incorrect trajectories supply an unlikelihood target at that same token.
 
 This repository reproduces that pipeline on LLaDA-8B-Instruct, the same recipe on Dream-v0-Instruct-7B, and the budget-matched diffu-GRPO and wd1++ baselines. Benchmarks are **MATH**, **GSM8K**, **HumanEval+**, and **MBPP+**. AceCode is the training set for the code benchmarks.
+
+## 📊 Results
+
+<p align="center">
+  <img src="assets/results.png" width="85%" alt="Accuracy gain over the base model: Pivot-SD versus the strongest baseline on MATH500, GSM8K, HumanEval+ and MBPP+.">
+</p>
+
+LLaDA-8B-Instruct, 256-token generation, mean of three runs. All methods use the same budget: 200 questions, 4 rollouts each, 1,000 steps.
+
+| Method | MATH500 | GSM8K | HumanEval+ | MBPP+ |
+|---|---:|---:|---:|---:|
+| LLaDA-8B-Instruct | 31.40 | 75.13 | 32.32 | 43.12 |
+| SFT-GT | 35.47 | 76.94 | 33.94 | 46.32 |
+| SFT-SD | 31.73 | 73.90 | 35.78 | 45.92 |
+| diffu-GRPO | 33.47 | 76.04 | 32.52 | 43.39 |
+| wd1++ | 33.27 | 76.93 | 33.54 | 43.12 |
+| **Pivot-SD (ours)** | **37.47** | **79.51** | **40.43** | **47.12** |
 
 ## Installation
 
@@ -240,12 +293,29 @@ Reported wall-clock on two L40s, 1,000 steps: diffu-GRPO 5.4 h, wd1++ 3.6 h, Piv
 
 ## Citation
 
+If you find Pivot-SD useful, please cite:
+
 ```bibtex
-@article{kim2026pivotsd,
-  title={Pivot-SD: Efficient Self-Distillation for Masked Diffusion Language Models},
-  author={Kim, Seo Hyun and Hong, Sunwoo and Choi, Younwoo and Chao, Chen-Hao and Yun, Se-Young and Krishnan, Rahul G.},
-  journal={arXiv preprint arXiv:2610.03665},
-  year={2026}
+@inproceedings{kim-etal-2026-pivot,
+    title = "Pivot-{SD}: Efficient Self-Distillation for Masked Diffusion Language Models",
+    author = "Kim, Seo Hyun  and
+      Hong, Sunwoo  and
+      Choi, Younwoo  and
+      Chao, Chen-Hao  and
+      Yun, Se-Young  and
+      Krishnan, Rahul G",
+    editor = "Lee, Hung-Yi  and
+      Dev, Sunipa  and
+      Li, Jessy  and
+      Elliott, Desmond",
+    booktitle = "Proceedings of the 2026 Conference on Empirical Methods in Natural Language Processing",
+    month = oct,
+    year = "2026",
+    address = "Budapest, Hungary",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2026.emnlp-main.2146/",
+    pages = "48790--48806",
+    ISBN = "979-8-89176-459-0"
 }
 ```
 
